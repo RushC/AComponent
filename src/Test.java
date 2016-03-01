@@ -26,8 +26,9 @@ public class Test {
         window.setVisible(true);
         a.await(200);
         a.setHighlightColor(Color.CYAN);
+        a.setCornerRadius(a.getWidth());
         
-        animator.Animator.getInstance().setSyncing(false);
+        animator.Animator.getInstance().setSyncing(true);
         
         animator.Animator.getInstance().setFramesPerSecond(60);
         a.lasting(400)
@@ -135,7 +136,7 @@ public class Test {
                 .await()
                 .rotate(135)
                 .await()
-                .rotate(180)
+                .rotate(480)
                 .await();                
         
         System.out.println("This should appear after the last animation.");

@@ -5,6 +5,8 @@ import animator.Property;
 
 import java.awt.Color;
 import java.awt.geom.Ellipse2D;
+import java.awt.geom.RectangularShape;
+import java.awt.geom.RoundRectangle2D;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Point;
@@ -40,6 +42,8 @@ public class AComponent extends JComponent {
     private Color                           highlightColor;
     // The number of radians to rotate the panel.
     private double                          rotation;
+    // The shape of the entire panel.
+    private RectangularShape                shape;
     
     
     /**
@@ -57,6 +61,7 @@ public class AComponent extends JComponent {
             }
         };
         highlightColor = Color.WHITE;
+        shape = new Rectangle();
         
         setOpaque(false);
     }
@@ -212,6 +217,15 @@ public class AComponent extends JComponent {
     }
     
     /**
+     * Retrieves the shape that the highlight is drawn as.
+     * 
+     * @return the highlight's shape.
+     */
+    public Shape getHighlight() {
+        return highlight;
+    }
+    
+    /**
      * Retrieves the color of the highlight.
      * 
      * @return the color of the highlight
@@ -239,6 +253,15 @@ public class AComponent extends JComponent {
     }
     
     /**
+     * Retrieves the shape that this component displays when it is drawn.
+     * 
+     * @return the component's shape.
+     */
+    public RectangularShape getShape() {
+        return shape;
+    }
+    
+    /**
      * A wrapper method for setAnimationDuration that allows method chaining.
      * 
      * @param animationDuration a positive number of milliseconds animations
@@ -253,6 +276,10 @@ public class AComponent extends JComponent {
     
     @Override
     protected void paintComponent(Graphics g) {
+        // Set the clip to the appropriately scaled shape.
+        shape.setFrame(0, 0, getWidth(), getHeight());
+        g.setClip(shape);
+        
         // Rotate the graphics on the center point.
         ((Graphics2D)g).rotate(
                 rotation, 
@@ -422,6 +449,21 @@ public class AComponent extends JComponent {
     public void setBackground(Color background) {
         this.background = background;
         repaint();
+    }
+    
+    /**
+     * Sets radius of the component's corners which will determine how rounded
+     * they are.
+     * 
+     * @param cornerRadius the radius to make the component's corners. If this
+     *                     value is greater than or equal to half of the 
+     *                     component's width and height, the component will
+     *                     be drawn as a circle.
+     */
+    public void setCornerRadius(int cornerRadius) {
+        shape = getWidth() == getHeight() && cornerRadius >= getWidth() / 2.0?
+                new Ellipse2D.Double():
+                new RoundRectangle2D.Double(0, 0, 0, 0,cornerRadius, cornerRadius);
     }
     
     /**
