@@ -13,7 +13,7 @@ public class Test {
         window.setSize(500, 500);
         window.setLocationRelativeTo(null);
         
-        AComponent a = new AComponent();
+        ALabel a = new ALabel("test.jpg", true);
         a.setBounds(10, 17, 50, 50);
         a.setBackground(Color.red);
         window.add(a);
@@ -24,15 +24,13 @@ public class Test {
         window.add(b);
         
         window.setVisible(true);
-        a.await(200);
+        a.await(1000);
         a.setHighlightColor(Color.CYAN);
-        a.setCornerRadius(a.getWidth());
         
         animator.Animator.getInstance().setSyncing(true);
-        
         animator.Animator.getInstance().setFramesPerSecond(60);
         a.lasting(400)
-                .using(new InversingInterpolator(new PolynomialInterpolator(2)))
+                .using(new DeceleratingInterpolator())
                 .translate(b.getX(), b.getY())
                 .await()
                 .translate(10, 319)
@@ -137,7 +135,18 @@ public class Test {
                 .rotate(135)
                 .await()
                 .rotate(480)
-                .await();                
+                .await()
+                .rotate(0)
+                .await()
+                .adjust(10)
+                .await()
+                .adjust(a.getWidth())
+                .await()
+                //.adjust(0)
+                .await()
+                .adjust(0)
+                .await();
+        a.setText("Done");
         
         System.out.println("This should appear after the last animation.");
     }

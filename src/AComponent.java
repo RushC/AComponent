@@ -45,7 +45,6 @@ public class AComponent extends JComponent {
     // The shape of the entire panel.
     private RectangularShape                shape;
     
-    
     /**
      * Constructs a new AComponent instance that uses a LinearInterpolator
      * and performs animations for 400 seconds by default.
@@ -64,6 +63,44 @@ public class AComponent extends JComponent {
         shape = new Rectangle();
         
         setOpaque(false);
+    }
+    
+    /**
+     * Animates the AComponent's corners towards the specified corner radius.
+     * 
+     * @param cornerRadius the corner radius that the AComponent should animate
+     *                     towards. Keep in mind that if this value ever reaches
+     *                     half the component's width and height it will keep
+     *                     the shape as an ellipse.
+     * @return this AComponent instance for chaining method calls.
+     */
+    public AComponent adjust(int cornerRadius) {
+        // Retrieve the current corner radius if there is one.
+        double currentRadius = shape instanceof RoundRectangle2D?
+                ((RoundRectangle2D)shape).getArcHeight():
+                0;
+        
+        // Create a new Property to represent the corner radius.
+        Property property = new Property(
+                // Animate from the current radius to the specified radius.
+                currentRadius, cornerRadius,
+                // Use the current animation duration and interpolator.
+                animationDuration, interpolator,
+                // Update the corner radius on each increment.
+                p -> setCornerRadius(p.value()),
+                // Have the Property remove itself when it is finished.
+                propertyRemover
+        );
+        
+        // Add the Property to the Properties list.
+        synchronized(properties) {
+            properties.add(property);
+        }
+        
+        // Begin the Property's animation.
+        property.animate();
+        
+        return this;
     }
     
     /**
@@ -136,7 +173,7 @@ public class AComponent extends JComponent {
      */
     public AComponent fade() {        
         // Create a property to represent the color's red value.
-        Property r= new Property(
+        Property r = new Property(
                 // Animate from the start color to the end color.
                 background.getRed(), highlightColor.getRed(),
                 // Use the current animation duration and interpolator.
@@ -456,14 +493,16 @@ public class AComponent extends JComponent {
      * they are.
      * 
      * @param cornerRadius the radius to make the component's corners. If this
-     *                     value is greater than or equal to half of the 
+     *                     value is greater than or equal to the 
      *                     component's width and height, the component will
      *                     be drawn as a circle.
      */
-    public void setCornerRadius(int cornerRadius) {
-        shape = getWidth() == getHeight() && cornerRadius >= getWidth() / 2.0?
+    public void setCornerRadius(double cornerRadius) {
+        shape = getWidth() == getHeight() && cornerRadius >= getWidth()?
                 new Ellipse2D.Double():
-                new RoundRectangle2D.Double(0, 0, 0, 0,cornerRadius, cornerRadius);
+                new RoundRectangle2D.Double(0, 0, 0, 0, cornerRadius, cornerRadius);
+        
+        repaint();
     }
     
     /**
