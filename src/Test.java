@@ -13,10 +13,12 @@ public class Test {
         window.setSize(500, 500);
         window.setLocationRelativeTo(null);
         
-        ALabel a = new ALabel("test.jpg", true);
+        ALabel a = new ALabel("testing");
         a.setBounds(10, 17, 50, 50);
         a.setBackground(Color.red);
-        window.add(a);
+        a.setHorizontalAlignment(javax.swing.SwingConstants.LEFT);
+        a.setVerticalTextPosition(javax.swing.SwingConstants.TOP);
+        //window.add(a);
         
         AComponent b = new AComponent();
         b.setBounds(400, 400, 50, 50);
@@ -29,7 +31,9 @@ public class Test {
         
         animator.Animator.getInstance().setSyncing(true);
         animator.Animator.getInstance().setFramesPerSecond(60);
-        a.lasting(400)
+        a.lasting(350)
+                .enter(window)
+                .await()
                 .using(new DeceleratingInterpolator())
                 .translate(b.getX(), b.getY())
                 .await()
@@ -141,13 +145,14 @@ public class Test {
                 .adjust(10)
                 .await()
                 .adjust(a.getWidth())
-                .await()
-                //.adjust(0)
-                .await()
-                .adjust(0)
                 .await();
-        a.setText("Done");
-        
+        a.swapText("Not done yet.").await();
+        a.swapText("Still not done yet.").await();
+        a.swapText("Wait for it").await();
+        a.swapText("Done")
+                .await()
+                .exit(window)
+                .await();
         System.out.println("This should appear after the last animation.");
     }
 }

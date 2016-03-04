@@ -4,6 +4,7 @@ import animator.interpolator.LinearInterpolator;
 import animator.Property;
 
 import java.awt.Color;
+import java.awt.Container;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.RectangularShape;
 import java.awt.geom.RoundRectangle2D;
@@ -26,14 +27,14 @@ import javax.swing.JComponent;
  */
 public class AComponent extends JComponent {
     // The list of Properties currently being animated.
-    private final ArrayList<Property>       properties;
+    protected final ArrayList<Property>     properties;
     // The default amount of time each animation should last for.
     private long                            animationDuration;
     // The default Interpolator to use for each animation.
     private Interpolator                    interpolator;
     // The AnimationEndListener used by all properties to remove themselves
     // from the properties list when their animations complete.
-    private final AnimationEndListener      propertyRemover;
+    protected final AnimationEndListener    propertyRemover;
     // The color of the background (overriden from JPanel due to needing to
     // keep the component transparent.
     private Color                           background;
@@ -161,6 +162,126 @@ public class AComponent extends JComponent {
     }
     
     /**
+     * Performs an entrance animation by animating the component from its center
+     * point with no size to its full bounds.
+     * 
+     * @return this AComponent instance for method chaining.
+     */
+    public AComponent enter() {
+        return enter(getBounds());
+    }
+    
+    /**
+     * Performs an entrance animation by animating the component from the center
+     * point of the specified bounds with no size to the specified bounds.
+     * 
+     * If a subclass wants to specify a custom entrance animation, this is the
+     * method it should override, as every other enter overload calls this
+     * method.
+     * 
+     * @param x the X position the component should enter on.
+     * @param y the Y position the component should enter on.
+     * @param width the width the component should enter to.
+     * @param height the height the component should enter to.
+     * @return this AComponent instance for method chaining.
+     */
+    public AComponent enter(int x, int y, int width, int height) {
+        // Make the component initially invisible.
+        setBounds(
+                x + width / 2 + width % 2,
+                y + height / 2 + height % 2,
+                0,
+                0
+        );
+        
+        // Animate the component to the specified size.
+        return scaleCentered(width, height);
+    }
+    
+    /**
+     * Performs an entrance animation by animating the component from the center
+     * point of the specified bounds with no size to the specified bounds.
+     * 
+     * @param bounds the bounds the component should enter on.
+     * @return this AComponent instance for method chaining.
+     */
+    public AComponent enter(Rectangle bounds) {
+        return enter(bounds.x, bounds.y, bounds.width, bounds.height);
+    }
+    
+    /**
+     * Performs an entrance animation after adding the component to the specified
+     * parent.
+     * 
+     * @param parent the component this component should be added to.
+     * @return this AComponent instance for chaining method calls.
+     */
+    public AComponent enter(Container parent) {
+        parent.add(this);
+        return enter();
+    }
+    
+    /**
+     * Performs an entrance animation after adding the component to the specified
+     * parent.
+     * 
+     * @param parent the component this component should be added to.
+     * @param x the X position the component should enter on.
+     * @param y the Y position the component should enter on.
+     * @param width the width the component should enter to.
+     * @param height the height the component should enter to.
+     * @return this AComponent instance for chaining method calls.
+     */
+    public AComponent enter(Container parent, int x, int y, int width, int height) {
+        parent.add(this);
+        return enter(x, y, width, height);
+    }
+    
+    /**
+     * Performs an entrance animation after adding the component to the specified
+     * parent.
+     * 
+     * @param parent the component this component should be added to.
+     * @param bounds the bounds the component should enter on.
+     * @return this AComponent instance for chaining method calls.
+     */
+    public AComponent enter(Container parent, Rectangle bounds) {
+        parent.add(this);
+        return enter(bounds);
+    }
+    
+    /**
+     * Performs an exit animation by shrinking the component towards its center
+     * with zero size. This animation will not actually remove the component
+     * from its parent.
+     * 
+     * If a subclass wishes to implement its own exit animation, this is the
+     * method it should override.
+     * 
+     * @return this AComponent instance for chaining method calls.
+     */
+    public AComponent exit() {
+        return scaleCentered(0, 0);
+    }
+    
+    /**
+     * Performs an exit animation and then removes the component from the 
+     * specified parent.
+     * 
+     * @param parent the parent container that contains this component.
+     * @return this AComponent instance for chaining method calls.
+     */
+    public AComponent exit(Container parent) {
+        synchronized (properties) {
+            exit();
+            properties.get(properties.size() - 1).addAnimationEndListener(
+                    p -> parent.remove(AComponent.this));
+        }
+        
+        return this;
+    }
+    
+    /**
      * Fills the highlight by animating it towards the highlight color from
      * the background color.
      * 
@@ -236,6 +357,9 @@ public class AComponent extends JComponent {
         g.animate();
         b.animate();
         
+        // Notify subclasses that the component is being highlighted.
+        highlight();
+        
         return this;
     }
     
@@ -297,6 +421,11 @@ public class AComponent extends JComponent {
     public RectangularShape getShape() {
         return shape;
     }
+    
+    /**
+     * Called when the component's highlight is being filled.
+     */
+    protected void highlight() {}
     
     /**
      * A wrapper method for setAnimationDuration that allows method chaining.
@@ -392,7 +521,7 @@ public class AComponent extends JComponent {
      * @return this AComponent instance for chaining method calls.
      * @see AComponent#unpulse() 
      */
-    public AComponent pulse(int x, int y, int startRadius) {
+    public AComponent pulse(int x, int y, int startRadius) {        
         // Calculate the final value of the radius by determining the distance
         // from the given starting position to the furthest corner.
         int endRadius = Stream.of(
@@ -434,6 +563,9 @@ public class AComponent extends JComponent {
         
         // Begin the Property's animation.
         property.animate();
+        
+        // Notify subclasses that the component is being highlighted.
+        highlight();
         
         return this;
     }
@@ -901,8 +1033,16 @@ public class AComponent extends JComponent {
         g.animate();
         b.animate();
         
+        // Tell subclasses that the highlight is being emptied.
+        unhighlight();
+        
         return this;
     }
+    
+    /**
+     * Called when the highlight is being emptied.
+     */
+    protected void unhighlight() { }
     
     /**
      * Animates the highlight by shrinking the filled highlight into a circle.
@@ -977,6 +1117,9 @@ public class AComponent extends JComponent {
         // Begin the Property's animation.
         property.animate();
         
+        // Tell subclasses that the highlight is being emptied.
+        unhighlight();
+        
         return this;
     }
     
@@ -1019,6 +1162,9 @@ public class AComponent extends JComponent {
         
         // Begin the Property's animation.
         property.animate();
+        
+        // Tell subclasses that the highlight is being emptied.
+        unhighlight();
         
         return this;
     }
@@ -1063,6 +1209,9 @@ public class AComponent extends JComponent {
         // Begin the Property's animation.
         property.animate();
         
+        // Tell subclasses that the highlight is being emptied.
+        unhighlight();
+        
         return this;
     }
     
@@ -1105,6 +1254,9 @@ public class AComponent extends JComponent {
         
         // Begin the Property's animation.
         property.animate();
+        
+        // Tell subclasses that the highlight is being emptied.
+        unhighlight();
         
         return this;
     }
@@ -1149,6 +1301,9 @@ public class AComponent extends JComponent {
         // Begin the Property's animation.
         property.animate();
         
+        // Tell subclasses that the highlight is being emptied.
+        unhighlight();
+        
         return this;
     }
     
@@ -1191,6 +1346,9 @@ public class AComponent extends JComponent {
         
         // Begin the Property's animation.
         property.animate();
+        
+        // Notify subclasses that the component is being highlighted.
+        highlight();
         
         return this;
     }
@@ -1235,6 +1393,9 @@ public class AComponent extends JComponent {
         // Begin the Property's animation.
         property.animate();
         
+        // Notify subclasses that the component is being highlighted.
+        highlight();
+        
         return this;
     }
     
@@ -1278,6 +1439,9 @@ public class AComponent extends JComponent {
         // Begin the Property's animation.
         property.animate();
         
+        // Notify subclasses that the component is being highlighted.
+        highlight();
+        
         return this;
     }
     
@@ -1320,6 +1484,9 @@ public class AComponent extends JComponent {
         
         // Begin the Property's animation.
         property.animate();
+        
+        // Notify subclasses that the component is being highlighted.
+        highlight();
         
         return this;
     }
