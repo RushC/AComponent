@@ -19,7 +19,7 @@ public interface AnimationEndListener {
     /**
      * Called when a Property's animation ends.
      * 
-     * @param endValue the Property whose animation just ended.
+     * @param property the Property whose animation just ended.
      */
     void animationEnded(Property property);
 }

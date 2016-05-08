@@ -1,3 +1,4 @@
+import animator.AnimatedObject;
 import animator.AnimationEndListener;
 import animator.interpolator.Interpolator;
 import animator.interpolator.LinearInterpolator;
@@ -26,15 +27,8 @@ import javax.swing.JComponent;
  * @author Caleb Rush
  */
 public class AComponent extends JComponent {
-    // The list of Properties currently being animated.
-    protected final ArrayList<Property>     properties;
-    // The default amount of time each animation should last for.
-    private long                            animationDuration;
-    // The default Interpolator to use for each animation.
-    private Interpolator                    interpolator;
-    // The AnimationEndListener used by all properties to remove themselves
-    // from the properties list when their animations complete.
-    protected final AnimationEndListener    propertyRemover;
+    // The animated object that is used to animate this object.
+    private final AnimatedObject            animatedObject;
     // The color of the background (overriden from JPanel due to needing to
     // keep the component transparent.
     private Color                           background;
@@ -51,15 +45,9 @@ public class AComponent extends JComponent {
      * and performs animations for 400 seconds by default.
      */
     public AComponent() {
-        properties = new ArrayList<>();
-        animationDuration = 400;
-        interpolator = new LinearInterpolator();
-        propertyRemover = property -> {
-            // Ensure concurrent modifications don't happen.
-            synchronized(properties) {
-                properties.remove(property);
-            }
-        };
+        animatedObject = new AnimatedObject(this);
+        setAnimationDuration(400);
+        setInterpolator(new LinearInterpolator());
         highlightColor = Color.WHITE;
         shape = new Rectangle();
         
@@ -80,26 +68,8 @@ public class AComponent extends JComponent {
         double currentRadius = shape instanceof RoundRectangle2D?
                 ((RoundRectangle2D)shape).getArcHeight():
                 0;
-        
-        // Create a new Property to represent the corner radius.
-        Property property = new Property(
-                // Animate from the current radius to the specified radius.
-                currentRadius, cornerRadius,
-                // Use the current animation duration and interpolator.
-                animationDuration, interpolator,
-                // Update the corner radius on each increment.
-                p -> setCornerRadius(p.value()),
-                // Have the Property remove itself when it is finished.
-                propertyRemover
-        );
-        
-        // Add the Property to the Properties list.
-        synchronized(properties) {
-            properties.add(property);
-        }
-        
-        // Begin the Property's animation.
-        property.animate();
+
+        animatedObject.animateValue("cornerRadius", currentRadius, cornerRadius);
         
         return this;
     }
@@ -142,22 +112,7 @@ public class AComponent extends JComponent {
      * @return this AComponent instance for chaining method calls.
      */
     public AComponent await(long milliseconds) {
-        // Only leave the loop when it is broken out of.
-        while (true) {
-            // Check if there are still Properties being animated.
-            synchronized (properties) {
-                if (properties.isEmpty())
-                    break;
-            }
-        }
-        
-        // Sleep for the specified amount of extra time.
-        try {
-            Thread.sleep(milliseconds);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-        
+        animatedObject.await(milliseconds);
         return this;
     }
     
@@ -272,12 +227,8 @@ public class AComponent extends JComponent {
      * @return this AComponent instance for chaining method calls.
      */
     public AComponent exit(Container parent) {
-        synchronized (properties) {
-            exit();
-            properties.get(properties.size() - 1).addAnimationEndListener(
-                    p -> parent.remove(AComponent.this));
-        }
-        
+        exit();
+        then(() -> parent.remove(AComponent.this));
         return this;
     }
     
@@ -293,69 +244,50 @@ public class AComponent extends JComponent {
      * @return this AComponent instance for chaining method calls.
      */
     public AComponent fade() {        
-        // Create a property to represent the color's red value.
-        Property r = new Property(
-                // Animate from the start color to the end color.
-                background.getRed(), highlightColor.getRed(),
-                // Use the current animation duration and interpolator.
-                animationDuration, interpolator,
-                // Create a new color with the given red value every increment.
-                p -> highlightColor = new Color(
-                        (int)p.value(), 
-                        highlightColor.getGreen(), 
-                        highlightColor.getBlue()
-                ),
-                // Have the Property remove itself when it is finished.
-                propertyRemover
-        );
-        
-        // Create a property to represent the color's green value.
-        Property g = new Property(
-                // Animate from the start color to the end color.
-                background.getGreen(), highlightColor.getGreen(),
-                // Use the current animation duration and interpolator.
-                animationDuration, interpolator,
-                // Create a new color with the given red value every increment.
-                p -> highlightColor = new Color(
-                        highlightColor.getRed(),
-                        (int)p.value(), 
-                        highlightColor.getBlue()
-                ),
-                // Have the Property remove itself when it is finished.
-                propertyRemover
-        );
-        
-        // Create a property to represent the color's blue value.
-        Property b = new Property(
-                // Animate from the start color to the end color.
-                background.getBlue(), highlightColor.getBlue(),
-                // Use the current animation duration and interpolator.
-                animationDuration, interpolator,
-                // Create a new color with the given red value every increment.
-                p -> {
+        // Animate the red value of the background color to the highlight color.
+        animatedObject.animateValue(
+                background.getRed(), 
+                highlightColor.getRed(),
+                r -> {
                     highlightColor = new Color(
-                        highlightColor.getRed(), 
-                        highlightColor.getGreen(),
-                        (int)p.value()
+                            (int)r.value(),
+                            highlightColor.getGreen(),
+                            highlightColor.getBlue()
                     );
                     highlight = new Rectangle(0, 0, getWidth(), getHeight());
                     repaint();
-                },
-                // Have the Property remove itself when it is finished.
-                propertyRemover
+                }
         );
         
-        // Add the properties to the Properties list.
-        synchronized(properties) {
-            properties.add(r);
-            properties.add(g);
-            properties.add(b);
-        }
+        // Animate the blue value of the background color to the highlight color.
+        animatedObject.animateValue(
+                background.getBlue(), 
+                highlightColor.getBlue(),
+                g -> {
+                    highlightColor = new Color(
+                            highlightColor.getRed(),
+                            (int)g.value(),
+                            highlightColor.getBlue()
+                    );
+                    highlight = new Rectangle(0, 0, getWidth(), getHeight());
+                    repaint();
+                }
+        );
         
-        // Begin the Properties' animations.
-        r.animate();
-        g.animate();
-        b.animate();
+        // Animate the green value of the background color to the highlight color.
+        animatedObject.animateValue(
+                background.getGreen(), 
+                highlightColor.getGreen(),
+                b -> {
+                    highlightColor = new Color(
+                            highlightColor.getRed(),
+                            highlightColor.getGreen(),
+                            (int)b.value()
+                    );
+                    highlight = new Rectangle(0, 0, getWidth(), getHeight());
+                    repaint();
+                }
+        );
         
         // Notify subclasses that the component is being highlighted.
         highlight();
@@ -364,12 +296,24 @@ public class AComponent extends JComponent {
     }
     
     /**
+     * Returns the AnimatedObject instance used to animate this object.
+     * 
+     * This should be used by subclasses to easily create new animations that
+     * will run in perfect parallel with the already defined animations.
+     * 
+     * @return an AnimatedObject instance.
+     */
+    protected AnimatedObject getAnimatedObject() {
+        return animatedObject;
+    }
+    
+    /**
      * Returns the duration that new animations will last for.
      * 
      * @return the animation duration in milliseconds
      */
     public long getAnimationDuration() {
-        return animationDuration;
+        return animatedObject.getAnimationDuration();
     }
     
     @Override
@@ -401,7 +345,7 @@ public class AComponent extends JComponent {
      * @return the Interpolator that new animations will use.
      */
     public Interpolator getInterpolator() {
-        return interpolator;
+        return animatedObject.getInterpolator();
     }
     
     /**
@@ -442,8 +386,13 @@ public class AComponent extends JComponent {
     
     @Override
     protected void paintComponent(Graphics g) {
-        // Set the clip to the appropriately scaled shape.
-        shape.setFrame(0, 0, getWidth(), getHeight());
+        // Set the clip to the rotation adjusted bounds.
+        shape.setFrame(
+                rotatedX() - getX(),
+                rotatedY() - getY(),
+                rotatedWidth(),
+                rotatedHeight()
+        );
         g.setClip(shape);
         
         // Rotate the graphics on the center point.
@@ -536,33 +485,22 @@ public class AComponent extends JComponent {
                             + Math.pow(getHeight() - y, 2))
                 ).max(Double::compare).get().intValue() + 1;
         
-        // Create a property to represent the highlight's radius.
-        Property property = new Property(
-                // Animate from the start radius to the end radius.
-                startRadius, endRadius,
-                // Use the current animation duration and interpolator.
-                animationDuration, interpolator,
-                // Create a new circle with the given radius every increment.
-                p -> {
+        // Animate the highlight's radius from the startRadius to the calculated
+        // end radius.
+        animatedObject.animateValue(
+                startRadius, 
+                endRadius, 
+                r -> {
+                    // Create a new circle with the radius at every increment.
                     highlight = new Ellipse2D.Double(
-                        x - p.value(), 
-                        y - p.value(), 
-                        2 * p.value(), 
-                        2 * p.value()
+                            x - r.value(),
+                            y - r.value(),
+                            2 * r.value(),
+                            2 * r.value()
                     );
                     repaint();
-                },
-                // Have the Property remove itself when it is finished.
-                propertyRemover
+                }
         );
-        
-        // Add the Property to the Properties list.
-        synchronized(properties) {
-            properties.add(property);
-        }
-        
-        // Begin the Property's animation.
-        property.animate();
         
         // Notify subclasses that the component is being highlighted.
         highlight();
@@ -570,30 +508,14 @@ public class AComponent extends JComponent {
         return this;
     }
     
-    /**
-     * Animates the AComponent towards the specified bounds.
-     * 
-     * @param x the X position to move the AComponent towards.
-     * @param y the Y position to move the AComponent towards.
-     * @param width the width to move the AComponent towards.
-     * @param height the height to move the AComponent towards.
-     * @return this AComponent instance for method chaining.
-     */
-    public AComponent transform(int x, int y, int width, int height) {
-        translate(x, y);
-        scale(width, height);
-        return this;
-    }
-    
-    /**
-     * Animates the AComponent towards the specified bounds.
-     * 
-     * @param r the bounds to move the AComponent towards.
-     * @return this AComponent instance for method chaining. 
-     */
-    public AComponent transform(Rectangle r) {
-        AComponent.this.transform(r.x, r.y, r.width, r.height);
-        return this;
+    @Override
+    public void repaint() {
+        if (getParent() != null) {
+            getParent().repaint();
+            return;
+        }
+        
+        super.repaint();
     }
     
     /**
@@ -606,12 +528,7 @@ public class AComponent extends JComponent {
      */
     public void setAnimationDuration(long animationDuration) 
             throws IllegalArgumentException{
-        // Ensure the animationDuration is positive.
-        if (animationDuration <= 0)
-            throw new IllegalArgumentException("The animation duration must be "
-                    + "positive!");
-        
-        this.animationDuration = animationDuration;
+        animatedObject.setAnimationDuration(animationDuration);
     }
     
     @Override
@@ -658,7 +575,7 @@ public class AComponent extends JComponent {
      * @see Interpolator
      */
     public void setInterpolator(Interpolator interpolator) {
-        this.interpolator = interpolator;
+        animatedObject.setInterpolator(interpolator);
     }
     
     /**
@@ -735,27 +652,65 @@ public class AComponent extends JComponent {
      * @return this AComponent instance for method chaining.
      */
     public AComponent rotate(double rotation) {
-        // Create a new Property to represent the rotation.
-        Property property = new Property(
-                // Animate from the current rotation to the specified rotation.
-                this.rotation, Math.toRadians(rotation),
-                // Use the current animation duration and interpolator.
-                animationDuration, interpolator,
-                // Update the rotation on each increment.
-                p -> setRotation(p.value()),
-                // Have the Property remove itself when it is finished.
-                propertyRemover
-        );
-        
-        // Add the Property to the Properties list.
-        synchronized(properties) {
-            properties.add(property);
-        }
-        
-        // Begin the Property's animation.
-        property.animate();
-        
+        animatedObject.animateValue("rotation", Math.toRadians(rotation));     
         return this;
+    }
+    
+    /**
+     * Calculates the bounds of the component adjusted for its rotation.
+     * 
+     * @return the calculated bounds.
+     */
+    public Rectangle rotatedBounds() {
+        return new Rectangle(
+                rotatedX(), 
+                rotatedY(), 
+                rotatedHeight(), 
+                rotatedWidth()
+        );
+    }
+    
+    /**
+     * Calculates the height of the component adjusted for its rotation.
+     * 
+     * @return the calculated height.
+     */
+    public int rotatedHeight() {
+        double rotatedHeight = getHeight() * Math.abs(Math.cos(rotation))
+                + getHeight() * Math.abs(Math.sin(rotation));
+        
+        return (int)rotatedHeight;
+    }
+    
+    
+    /**
+     * Calculates the width of the component adjusted for its rotation.
+     * 
+     * @return the calculated width.
+     */
+    public int rotatedWidth() {
+        double rotatedWidth = getWidth() * Math.abs(Math.cos(rotation))
+                + getHeight() * Math.abs(Math.sin(rotation));
+        
+        return (int)rotatedWidth;
+    }
+    
+    /**
+     * Calculates the X position of the component adjusted for its rotation.
+     * 
+     * @return the calculated X position.
+     */
+    public int rotatedX() {
+        return getX() + (getWidth() - rotatedWidth()) / 2;
+    }
+    
+    /**
+     * Calculates the Y position of the component adjusted for its rotation.
+     * 
+     * @return the calculated Y position.
+     */
+    public int rotatedY() {
+        return getY() + (getHeight() - rotatedHeight()) / 2;
     }
     
     /**
@@ -793,26 +748,12 @@ public class AComponent extends JComponent {
      * @return this AComponent instance for method chaining.
      */
     public AComponent scaleHeight(int height) {
-        // Create a new Property to represent the height.
-        Property property = new Property(
-                // Animate from the current height to the specified height.
-                getHeight(), height,
-                // Use the current animation duration and interpolator.
-                animationDuration, interpolator,
-                // Update the X position on each increment.
-                p -> setSize(getWidth(), (int)p.value()),
-                // Have the Property remove itself when it is finished.
-                propertyRemover
+        animatedObject.animateValue(
+                getHeight(), 
+                height, 
+                h -> setSize(getWidth(), (int)h.value())
         );
-        
-        // Add the Property to the Properties list.
-        synchronized(properties) {
-            properties.add(property);
-        }
-        
-        // Begin the Property's animation.
-        property.animate();
-        
+
         return this;
     }
     
@@ -837,25 +778,11 @@ public class AComponent extends JComponent {
      * @return this AComponent instance for method chaining.
      */
     public AComponent scaleWidth(int width) {
-        // Create a new Property to represent the width.
-        Property property = new Property(
-                // Animate from the current width to the specified width.
-                getWidth(), width,
-                // Use the current animation duration and interpolator.
-                animationDuration, interpolator,
-                // Update the X position on each increment.
-                p -> setSize((int)p.value(), getHeight()),
-                // Have the Property remove itself when it is finished.
-                propertyRemover
+        animatedObject.animateValue(
+                getWidth(), 
+                width, 
+                w -> setSize((int)w.value(), getHeight())
         );
-        
-        // Add the Property to the Properties list.
-        synchronized(properties) {
-            properties.add(property);
-        }
-        
-        // Begin the Property's animation.
-        property.animate();
         
         return this;
     }
@@ -874,31 +801,76 @@ public class AComponent extends JComponent {
     }
     
     /**
+     * Runs the specified callback runnable in a new thread after the most 
+     * recently started animation has finished.
+     * 
+     * This method is asynchronous and therefore returns immediately.
+     * 
+     * @param callback a Runnable whose run method will be called when all
+     *                 animations finish running.
+     * @return this AComponent instance for method chaining.
+     * @see AComponent#await() 
+     */
+    public AComponent then(Runnable callback) {
+        return then(callback, 0);
+    }
+    
+    /**
+     * Runs the specified callback runnable in a new thread after a specified
+     * amount of time after the most recently started animation has finished.
+     * 
+     * This method is asynchronous and therefore returns immediately.
+     * 
+     * @param callback a Runnable whose run method will be called when all
+     *                 animations finish running.
+     * @param milliseconds the number of milliseconds to wait until all of the
+     *                      animations are finished running to run the Runnable.
+     * @return this AComponent instance for method chaining.
+     * @see AComponent#await() 
+     */
+    public AComponent then(Runnable callback, long milliseconds) {
+        animatedObject.then(callback, milliseconds);
+        return this;
+    }
+    
+    /**
+     * Animates the AComponent towards the specified bounds.
+     * 
+     * @param x the X position to move the AComponent towards.
+     * @param y the Y position to move the AComponent towards.
+     * @param width the width to move the AComponent towards.
+     * @param height the height to move the AComponent towards.
+     * @return this AComponent instance for method chaining.
+     */
+    public AComponent transform(int x, int y, int width, int height) {
+        translate(x, y);
+        scale(width, height);
+        return this;
+    }
+    
+    /**
+     * Animates the AComponent towards the specified bounds.
+     * 
+     * @param r the bounds to move the AComponent towards.
+     * @return this AComponent instance for method chaining. 
+     */
+    public AComponent transform(Rectangle r) {
+        AComponent.this.transform(r.x, r.y, r.width, r.height);
+        return this;
+    }
+    
+    /**
      * Moves the AComponent horizontally to the specified X position.
      * 
      * @param x the X position to move the AComponent towards
      * @return this AComponent instance for chaining method calls
      */
     public AComponent translateX(int x) {
-        // Create a new Property to represent the X value.
-        Property property = new Property(
-                // Animate from the current X position to the specified position.
-                getX(), x,
-                // Use the current animation duration and interpolator.
-                animationDuration, interpolator,
-                // Update the X position on each increment.
-                p -> setLocation((int)p.value(), getY()),
-                // Have the Property remove itself when it is finished.
-                propertyRemover
+        animatedObject.animateValue(
+                getX(), 
+                x,
+                newX -> setLocation((int)newX.value(), getY())
         );
-        
-        // Add the Property to the Properties list.
-        synchronized(properties) {
-            properties.add(property);
-        }
-        
-        // Begin the Property's animation.
-        property.animate();
         
         return this;
     }
@@ -935,25 +907,11 @@ public class AComponent extends JComponent {
      * @return this AComponent instance for chaining method calls
      */
     public AComponent translateY(int y) {
-        // Create a new Property to represent the Y value.
-        Property property = new Property(
-                // Animate from the current X position to the specified position.
-                getY(), y,
-                // Use the current animation duration and interpolator.
-                animationDuration, interpolator,
-                // Update the X position on each increment.
-                p -> setLocation(getX(), (int)p.value()),
-                // Have the Property remove itself when it is finished.
-                propertyRemover
+        animatedObject.animateValue(
+                getY(), 
+                y,
+                newY -> setLocation(getX(), (int)newY.value())
         );
-        
-        // Add the Property to the Properties list.
-        synchronized(properties) {
-            properties.add(property);
-        }
-        
-        // Begin the Property's animation.
-        property.animate();
         
         return this;
     }
@@ -969,69 +927,50 @@ public class AComponent extends JComponent {
      * @return this AComponent instance for chaining method calls.
      */
     public AComponent unfade() {
-        // Create a property to represent the color's red value.
-        Property r= new Property(
-                // Animate from the start color to the end color.
-                highlightColor.getRed(), background.getRed(),
-                // Use the current animation duration and interpolator.
-                animationDuration, interpolator,
-                // Create a new color with the given red value every increment.
-                p -> highlightColor = new Color(
-                        (int)p.value(), 
-                        highlightColor.getGreen(), 
-                        highlightColor.getBlue()
-                ),
-                // Have the Property remove itself when it is finished.
-                propertyRemover
-        );
-        
-        // Create a property to represent the color's green value.
-        Property g = new Property(
-                // Animate from the start color to the end color.
-                highlightColor.getGreen(), background.getGreen(),
-                // Use the current animation duration and interpolator.
-                animationDuration, interpolator,
-                // Create a new color with the given red value every increment.
-                p -> highlightColor = new Color(
-                        highlightColor.getRed(),
-                        (int)p.value(), 
-                        highlightColor.getBlue()
-                ),
-                // Have the Property remove itself when it is finished.
-                propertyRemover
-        );
-        
-        // Create a property to represent the color's blue value.
-        Property b = new Property(
-                // Animate from the start color to the end color.
-                highlightColor.getBlue(), background.getBlue(),
-                // Use the current animation duration and interpolator.
-                animationDuration, interpolator,
-                // Create a new color with the given red value every increment.
-                p -> {
+        // Animate the red value of the highlight color to the background color.
+        animatedObject.animateValue(
+                highlightColor.getRed(), 
+                background.getRed(),
+                r -> {
                     highlightColor = new Color(
-                        highlightColor.getRed(), 
-                        highlightColor.getGreen(),
-                        (int)p.value()
+                            (int)r.value(),
+                            highlightColor.getGreen(),
+                            highlightColor.getBlue()
                     );
                     highlight = new Rectangle(0, 0, getWidth(), getHeight());
                     repaint();
-                },
-                // Have the Property remove itself when it is finished.
-                propertyRemover
+                }
         );
         
-        // Add the properties to the Properties list.
-        synchronized(properties) {
-            properties.add(r);
-            properties.add(g);
-            properties.add(b);
-        }
+        // Animate the blue value of the highlight color to the background color.
+        animatedObject.animateValue(
+                highlightColor.getBlue(), 
+                background.getBlue(),
+                g -> {
+                    highlightColor = new Color(
+                            highlightColor.getRed(),
+                            (int)g.value(),
+                            highlightColor.getBlue()
+                    );
+                    highlight = new Rectangle(0, 0, getWidth(), getHeight());
+                    repaint();
+                }
+        );
         
-        // Begin the Properties' animations.
-        r.animate();
-        g.animate();
-        b.animate();
+        // Animate the green value of the highlight color to the background color.
+        animatedObject.animateValue(
+                highlightColor.getGreen(), 
+                background.getGreen(),
+                b -> {
+                    highlightColor = new Color(
+                            highlightColor.getRed(),
+                            highlightColor.getGreen(),
+                            (int)b.value()
+                    );
+                    highlight = new Rectangle(0, 0, getWidth(), getHeight());
+                    repaint();
+                }
+        );
         
         // Tell subclasses that the highlight is being emptied.
         unhighlight();
@@ -1089,33 +1028,20 @@ public class AComponent extends JComponent {
                             + Math.pow(getHeight() - y, 2))
                 ).max(Double::compare).get().intValue() + 1;
         
-        // Create a property to represent the highlight's radius.
-        Property property = new Property(
-                // Animate from the start radius to 0.
-                startRadius, 0,
-                // Use the current animation duration and interpolator.
-                animationDuration, interpolator,
-                // Create a new circle with the given radius every increment.
-                p -> {
+        // Animate from the starting radius to no radius.
+        animatedObject.animateValue(
+                startRadius,
+                0,
+                r -> {
                     highlight = new Ellipse2D.Double(
-                        x - p.value(), 
-                        y - p.value(), 
-                        2 * p.value(), 
-                        2 * p.value()
+                        x - r.value(), 
+                        y - r.value(), 
+                        2 * r.value(), 
+                        2 * r.value()
                     );
                     repaint();
-                },
-                // Have the Property remove itself when it is finished.
-                propertyRemover
+                }
         );
-        
-        // Add the Property to the Properties list.
-        synchronized(properties) {
-            properties.add(property);
-        }
-        
-        // Begin the Property's animation.
-        property.animate();
         
         // Tell subclasses that the highlight is being emptied.
         unhighlight();
@@ -1135,13 +1061,11 @@ public class AComponent extends JComponent {
      * @return this AComponent instance for method chaining.
      */
     public AComponent unwashDown() {
-        // Create a property to represent the highlight's height.
-        Property property = new Property(
-                // Animate from 0 to the component height.
-                getHeight(), 0,
-                // Use the current animation duration and interpolator.
-                animationDuration, interpolator,
-                // Create a new rectangle every increment.
+        // Animate the height of the highlight from the height of the component
+        // to zero.
+        animatedObject.animateValue(
+                getHeight(), 
+                0, 
                 p -> {
                     highlight = new Rectangle(
                         0, 
@@ -1150,18 +1074,8 @@ public class AComponent extends JComponent {
                         (int)p.value()
                     );
                     repaint();
-                },
-                // Have the Property remove itself when it is finished.
-                propertyRemover
+                }
         );
-        
-        // Add the Property to the Properties list.
-        synchronized(properties) {
-            properties.add(property);
-        }
-        
-        // Begin the Property's animation.
-        property.animate();
         
         // Tell subclasses that the highlight is being emptied.
         unhighlight();
@@ -1181,33 +1095,20 @@ public class AComponent extends JComponent {
      * @return this AComponent instance for method chaining.
      */
     public AComponent unwashLeft() {
-        // Create a property to represent the highlight's width.
-        Property property = new Property(
-                // Animate from 0 to the component width.
-                getWidth(), 0,
-                // Use the current animation duration and interpolator.
-                animationDuration, interpolator,
-                // Create a new rectangle every increment.
-                p -> {
+        // Animate the highlight width from the component's width to zero.
+        animatedObject.animateValue(
+                getWidth(), 
+                0,
+                w -> {
                     highlight = new Rectangle(
                         0, 
                         0, 
-                        (int)p.value(), 
+                        (int)w.value(), 
                         getHeight()
                     );
                     repaint();
-                },
-                // Have the Property remove itself when it is finished.
-                propertyRemover
+                }           
         );
-        
-        // Add the Property to the Properties list.
-        synchronized(properties) {
-            properties.add(property);
-        }
-        
-        // Begin the Property's animation.
-        property.animate();
         
         // Tell subclasses that the highlight is being emptied.
         unhighlight();
@@ -1227,33 +1128,20 @@ public class AComponent extends JComponent {
      * @return this AComponent instance for method chaining.
      */
     public AComponent unwashRight() {
-        // Create a property to represent the highlight's width.
-        Property property = new Property(
-                // Animate from the component width to 0.
-                getWidth(), 0,
-                // Use the current animation duration and interpolator.
-                animationDuration, interpolator,
-                // Create a new rectangle every increment.
-                p -> {
+        // Animate the component width to zero.
+        animatedObject.animateValue(
+                getWidth(),
+                0, 
+                w -> {
                     highlight = new Rectangle(
-                        getWidth() - (int)p.value(), 
+                        getWidth() - (int)w.value(), 
                         0, 
-                        (int)p.value(), 
+                        (int)w.value(), 
                         getHeight()
                     );
                     repaint();
-                },
-                // Have the Property remove itself when it is finished.
-                propertyRemover
+                }
         );
-        
-        // Add the Property to the Properties list.
-        synchronized(properties) {
-            properties.add(property);
-        }
-        
-        // Begin the Property's animation.
-        property.animate();
         
         // Tell subclasses that the highlight is being emptied.
         unhighlight();
@@ -1273,13 +1161,10 @@ public class AComponent extends JComponent {
      * @return this AComponent instance for method chaining.
      */
     public AComponent unwashUp() {
-        // Create a property to represent the highlight's height.
-        Property property = new Property(
-                // Animate from 0 to the component height.
-                getHeight(), 0,
-                // Use the current animation duration and interpolator.
-                animationDuration, interpolator,
-                // Create a new rectangle every increment.
+        // Animate the highlight's height from the component's height to zero.
+        animatedObject.animateValue(
+                getHeight(), 
+                0, 
                 p -> {
                     highlight = new Rectangle(
                         0, 
@@ -1288,22 +1173,24 @@ public class AComponent extends JComponent {
                         (int)p.value()
                     );
                     repaint();
-                },
-                // Have the Property remove itself when it is finished.
-                propertyRemover
+                }
         );
-        
-        // Add the Property to the Properties list.
-        synchronized(properties) {
-            properties.add(property);
-        }
-        
-        // Begin the Property's animation.
-        property.animate();
         
         // Tell subclasses that the highlight is being emptied.
         unhighlight();
         
+        return this;
+    }
+    
+    /**
+     * A wrapper method for setInterpolator that allows for method chaining.
+     * 
+     * @param interpolator an Interpolator that animations should use.
+     * @return this AComponent method for method chaining.
+     * @see AComponent#setInterpolator
+     */
+    public AComponent using(Interpolator interpolator) {
+        setInterpolator(interpolator);
         return this;
     }
     
@@ -1319,33 +1206,20 @@ public class AComponent extends JComponent {
      * @return this AComponent instance for method chaining.
      */
     public AComponent washDown() {
-        // Create a property to represent the highlight's height.
-        Property property = new Property(
-                // Animate from 0 to the component height.
-                0, getHeight(),
-                // Use the current animation duration and interpolator.
-                animationDuration, interpolator,
-                // Create a new rectangle every increment.
-                p -> {
+        // Animate from 0 to the component height.
+        animatedObject.animateValue(
+                0, 
+                getHeight(),
+                h -> {
                     highlight = new Rectangle(
                         0, 
                         0, 
                         getWidth(), 
-                        (int)p.value()
+                        (int)h.value()
                     );
                     repaint();
-                },
-                // Have the Property remove itself when it is finished.
-                propertyRemover
+                }
         );
-        
-        // Add the Property to the Properties list.
-        synchronized(properties) {
-            properties.add(property);
-        }
-        
-        // Begin the Property's animation.
-        property.animate();
         
         // Notify subclasses that the component is being highlighted.
         highlight();
@@ -1365,33 +1239,20 @@ public class AComponent extends JComponent {
      * @return this AComponent instance for method chaining.
      */
     public AComponent washLeft() {
-        // Create a property to represent the highlight's width.
-        Property property = new Property(
-                // Animate from 0 to the component width.
-                0, getWidth(),
-                // Use the current animation duration and interpolator.
-                animationDuration, interpolator,
-                // Create a new rectangle every increment.
-                p -> {
+        // Animate from 0 to the component width.
+        animatedObject.animateValue(
+                0, 
+                getWidth(),
+                w -> {
                     highlight = new Rectangle(
-                        getWidth() - (int)p.value(), 
+                        getWidth() - (int)w.value(), 
                         0, 
-                        (int)p.value(), 
+                        (int)w.value(), 
                         getHeight()
                     );
                     repaint();
-                },
-                // Have the Property remove itself when it is finished.
-                propertyRemover
+                }
         );
-        
-        // Add the Property to the Properties list.
-        synchronized(properties) {
-            properties.add(property);
-        }
-        
-        // Begin the Property's animation.
-        property.animate();
         
         // Notify subclasses that the component is being highlighted.
         highlight();
@@ -1411,33 +1272,20 @@ public class AComponent extends JComponent {
      * @return this AComponent instance for method chaining.
      */
     public AComponent washRight() {
-        // Create a property to represent the highlight's width.
-        Property property = new Property(
-                // Animate from 0 to the component width.
-                0, getWidth(),
-                // Use the current animation duration and interpolator.
-                animationDuration, interpolator,
-                // Create a new rectangle every increment.
-                p -> {
+        // Animate from 0 to the component width.
+        animatedObject.animateValue(
+                0, 
+                getWidth(),
+                w -> {
                     highlight = new Rectangle(
                         0, 
                         0, 
-                        (int)p.value(), 
+                        (int)w.value(), 
                         getHeight()
                     );
                     repaint();
-                },
-                // Have the Property remove itself when it is finished.
-                propertyRemover
+                }
         );
-        
-        // Add the Property to the Properties list.
-        synchronized(properties) {
-            properties.add(property);
-        }
-        
-        // Begin the Property's animation.
-        property.animate();
         
         // Notify subclasses that the component is being highlighted.
         highlight();
@@ -1457,49 +1305,23 @@ public class AComponent extends JComponent {
      * @return this AComponent instance for method chaining.
      */
     public AComponent washUp() {
-        // Create a property to represent the highlight's height.
-        Property property = new Property(
-                // Animate from 0 to the component height.
+        // Animate from 0 to the component height.
+        animatedObject.animateValue(
                 0, getHeight(),
-                // Use the current animation duration and interpolator.
-                animationDuration, interpolator,
-                // Create a new rectangle every increment.
-                p -> {
+                h -> {
                     highlight = new Rectangle(
                         0, 
-                        getHeight() - (int)p.value(), 
+                        getHeight() - (int)h.value(), 
                         getWidth(), 
-                        (int)p.value()
+                        (int)h.value()
                     );
                     repaint();
-                },
-                // Have the Property remove itself when it is finished.
-                propertyRemover
+                }
         );
-        
-        // Add the Property to the Properties list.
-        synchronized(properties) {
-            properties.add(property);
-        }
-        
-        // Begin the Property's animation.
-        property.animate();
         
         // Notify subclasses that the component is being highlighted.
         highlight();
         
-        return this;
-    }
-    
-    /**
-     * A wrapper method for setInterpolator that allows for method chaining.
-     * 
-     * @param interpolator an Interpolator that animations should use.
-     * @return this AComponent method for method chaining.
-     * @see AComponent#setInterpolator
-     */
-    public AComponent using(Interpolator interpolator) {
-        setInterpolator(interpolator);
         return this;
     }
 }

@@ -20,7 +20,7 @@ public class ALabel extends AComponent {
     // The image to be displayed in the background of the label.
     private BufferedImage                   image;
     // The internal JLabel to delegate to.
-    private final JLabel                    label;
+    private JLabel                          label;
     // Whether or not the image should be scaled to the size of the label.
     private boolean                         scalingImage;
     // The color of the text when the label is highlighted.
@@ -253,44 +253,35 @@ public class ALabel extends AComponent {
         // Save the label's current Y position.
         int y = label.getY();
         
+        // Add a new JLabel with the new text underneath the bottom.
+        JLabel newLabel = new JLabel(text);
+        newLabel.setLocation(label.getX(), getHeight());
+        newLabel.setSize(label.getSize());
+        newLabel.setHorizontalAlignment(label.getHorizontalAlignment());
+        newLabel.setVerticalAlignment(label.getVerticalAlignment());
+        add(newLabel);
+        
         // Animate the current JLabel out.
-        Property property1 = new Property(
-                y, -label.getHeight(),
-                getAnimationDuration() / 2, getInterpolator(),
-                p1 -> label.setLocation(label.getX(), (int)p1.value()),
-                propertyRemover
+        getAnimatedObject().animateValue(
+                y, 
+                -label.getHeight(),
+                outY -> label.setLocation(label.getX(), (int)outY.value())
         );
         
-        // Animate the label back in.
-        Property property2 = new Property(
-                getHeight(), y,
-                getAnimationDuration() / 2, getInterpolator(),
-                p2 -> label.setLocation(label.getX(), (int)p2.value()),
-                propertyRemover
+        // Animate the new JLabel in.
+        getAnimatedObject().animateValue(
+                getHeight(), 
+                y, 
+                inY -> newLabel.setLocation(newLabel.getX(), (int)inY.value())
         );
         
-        // Swap the text after the first animation.
-        property1.addAnimationEndListener(p1 -> {
-                // Change the label's text.
-                remove(label);
-                label.setText(text);
-                
-                // Relocate the label.
-                label.setLocation(label.getX(), getHeight());
-                add(label);
-                
-                // Begin the property's animation.
-                property2.animate();
+        // Once the animations are finished...
+        getAnimatedObject().then(() -> {
+            // Remove the old label.
+            remove(label);
+            // Set the new label as the current label.
+            label = newLabel;
         });
-        
-        // Add the properties to the properties list.
-        synchronized(properties) {
-            properties.add(property1);
-            properties.add(property2);
-        }
-        
-        // Begin the first property's animation.
-        property1.animate();
         
         return this;
     }

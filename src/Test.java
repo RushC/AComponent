@@ -13,10 +13,13 @@ public class Test {
         window.setSize(500, 500);
         window.setLocationRelativeTo(null);
         
-        ALabel a = new ALabel("testing");
+        ALabel a = new ALabel();
+        a.setText("");
+        a.setImage("Trash.png");
+        a.setScalingImage(true);
         a.setBounds(10, 17, 50, 50);
         a.setBackground(Color.red);
-        a.setHorizontalAlignment(javax.swing.SwingConstants.LEFT);
+        a.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
         a.setVerticalTextPosition(javax.swing.SwingConstants.TOP);
         //window.add(a);
         
@@ -145,12 +148,14 @@ public class Test {
                 .adjust(10)
                 .await()
                 .adjust(a.getWidth())
-                .await();
-        a.swapText("Not done yet.").await();
-        a.swapText("Still not done yet.").await();
-        a.swapText("Wait for it").await();
-        a.swapText("Done")
                 .await()
+                .adjust(0)
+                .await();
+        a.swapText("Not done yet.").await(200);
+        a.swapText("Still not done yet.").await(200);
+        a.swapText("Wait for it").await(200);
+        a.swapText("Done")
+                .await(200)
                 .exit(window)
                 .await();
         System.out.println("This should appear after the last animation.");
